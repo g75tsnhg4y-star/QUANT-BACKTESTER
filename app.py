@@ -9,9 +9,12 @@ st.set_page_config(page_title="God-Mode Quant Engine", layout="wide")
 
 # --- SIDEBAR: INSTITUTIONAL PARAMETERS ---
 st.sidebar.header("⚙️ Quantitative Parameters")
-ticker = st.sidebar.text_input("Asset Ticker", value="^NSEI")
-start_date = st.sidebar.date_input("Start Date", pd.to_datetime("2010-01-01"))
-end_date = st.sidebar.date_input("End Date", pd.to_datetime("today"))
+ticker = st.sidebar.text_input("Asset Ticker", value="C") # Default to Citigroup
+
+# Explicitly set min_value so Streamlit doesn't lock the calendar to 10 years
+min_allowed_date = pd.to_datetime("1990-01-01")
+start_date = st.sidebar.date_input("Start Date", pd.to_datetime("2005-01-01"), min_value=min_allowed_date)
+end_date = st.sidebar.date_input("End Date", pd.to_datetime("2015-01-01"), min_value=min_allowed_date)
 
 st.sidebar.divider()
 st.sidebar.subheader("1. Alpha Generation")
@@ -61,7 +64,6 @@ try:
     df['Direction'] = np.where(df['Fast_MA'] > df['Slow_MA'], 1, 0)
     
     # --- 2. SIZING ALGORITHMS ---
-    # Calculate underlying metrics needed for both UI and math
     df['Rolling_Vol'] = df['Market_Return'].rolling(window=20).std() * np.sqrt(252)
     
     roll_window = 60
@@ -72,7 +74,6 @@ try:
     df['Win_Rate'] = (df['Gain'] > 0).rolling(window=roll_window).sum() / roll_window
     df['Payoff_Ratio'] = df['Avg_Gain'] / df['Avg_Loss']
     
-    # Switch logic based on user selection
     if sizing_model == "Volatility Scaling (Risk Parity)":
         df['Raw_Exposure'] = vol_target / df['Rolling_Vol']
         df['Raw_Exposure'] = np.clip(df['Raw_Exposure'].replace([np.inf, -np.inf], 0).fillna(0), 0, max_leverage)
@@ -129,7 +130,6 @@ try:
         
     with tab2:
         st.subheader("⚖️ Position Sizing Engine")
-        st.write("Observe how the selected mathematical model dynamically alters leverage prior to the Black Swan override.")
         fig2 = make_subplots(specs=[[{"secondary_y": True}]])
         if sizing_model == "Volatility Scaling (Risk Parity)":
             fig2.add_trace(go.Scatter(x=df.index, y=df['Rolling_Vol']*100, name='Market Volatility (%)', line=dict(color='gray', width=1)), secondary_y=False)
@@ -142,7 +142,6 @@ try:
 
     with tab3:
         st.subheader("🚨 Tail-Risk Kurtosis Override")
-        st.write("When the red line (Kurtosis) spikes above the crash limit, the system overrides all sizing math and drops capital deployed to zero.")
         fig3 = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1)
         fig3.add_trace(go.Scatter(x=df.index, y=df['Final_Position'], name='Actual Capital Deployed', fill='tozeroy', line=dict(color='#00bfff', width=1)), row=1, col=1)
         fig3.add_trace(go.Scatter(x=df.index, y=df['Rolling_Kurtosis'], name='Excess Kurtosis', line=dict(color='#ff3333', width=2)), row=2, col=1)
