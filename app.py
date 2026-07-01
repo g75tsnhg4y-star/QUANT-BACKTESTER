@@ -61,12 +61,9 @@ try:
     df['Direction'] = np.where(df['Fast_MA'] > df['Slow_MA'], 1, 0)
     
     # --- 2. SIZING ALGORITHMS ---
-    # A. Volatility Scaling
+    # Calculate underlying metrics needed for both UI and math
     df['Rolling_Vol'] = df['Market_Return'].rolling(window=20).std() * np.sqrt(252)
-    df['Vol_Exposure'] = vol_target / df['Rolling_Vol']
-    df['Vol_Exposure'] = np.clip(df['Vol_Exposure'].replace([np.inf, -np.inf], 0).fillna(0), 0, max_leverage)
     
-    # B. Kelly Criterion
     roll_window = 60
     df['Gain'] = np.where(df['Market_Return'] > 0, df['Market_Return'], 0)
     df['Loss'] = np.where(df['Market_Return'] < 0, abs(df['Market_Return']), 0)
@@ -75,15 +72,14 @@ try:
     df['Win_Rate'] = (df['Gain'] > 0).rolling(window=roll_window).sum() / roll_window
     df['Payoff_Ratio'] = df['Avg_Gain'] / df['Avg_Loss']
     
-    raw_kelly = df['Win_Rate'] - ((1 - df['Win_Rate']) / df['Payoff_Ratio'])
-    if sizing_model == "Dynamic Kelly (Optimal Growth)":
-        df['Kelly_Exposure'] = np.clip(raw_kelly.fillna(0) * kelly_fraction, 0, max_leverage)
+    # Switch logic based on user selection
+    if sizing_model == "Volatility Scaling (Risk Parity)":
+        df['Raw_Exposure'] = vol_target / df['Rolling_Vol']
+        df['Raw_Exposure'] = np.clip(df['Raw_Exposure'].replace([np.inf, -np.inf], 0).fillna(0), 0, max_leverage)
     else:
-        df['Kelly_Exposure'] = 0 # Ignored if Vol Scaling is selected
+        raw_kelly = df['Win_Rate'] - ((1 - df['Win_Rate']) / df['Payoff_Ratio'])
+        df['Raw_Exposure'] = np.clip(raw_kelly.fillna(0) * kelly_fraction, 0, max_leverage)
         
-    # Select Active Sizing Model
-    df['Raw_Exposure'] = df['Vol_Exposure'] if sizing_model == "Volatility Scaling (Risk Parity)" else df['Kelly_Exposure']
-    
     # --- 3. BLACK SWAN OVERRIDE ---
     df['Rolling_Kurtosis'] = df['Market_Return'].rolling(window=kurtosis_window).kurt()
     df['Tail_Risk_Warning'] = np.where(df['Rolling_Kurtosis'] > kurtosis_threshold, 1, 0)
