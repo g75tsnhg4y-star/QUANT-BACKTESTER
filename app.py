@@ -20,12 +20,20 @@ st.write("Testing a simple Moving Average Crossover strategy against Buy & Hold.
 # --- DATA PULL & BACKTEST LOGIC ---
 @st.cache_data
 def load_data(t, start, end):
-    df = yf.download(t, start=start, end=end)
+    # Updated to use yf.Ticker to avoid recent Yahoo Finance formatting bugs
+    stock = yf.Ticker(t)
+    df = stock.history(start=start, end=end)
     return df['Close']
 
 try:
     # 1. Fetch Data
     data = load_data(ticker, start_date, end_date)
+    
+    # Check if Yahoo blocked the cloud server from downloading
+    if data.empty:
+        st.error("No data found. The ticker might be invalid, or Yahoo Finance is temporarily blocking the cloud server. Try typing AAPL or RELIANCE.NS.")
+        st.stop()
+        
     df = pd.DataFrame({'Close': data})
     
     # 2. Calculate Indicators
@@ -80,4 +88,5 @@ try:
     st.write("Where $R_p$ is the portfolio return, $R_f$ is the risk-free rate (7% assumed), and $\sigma_p$ is the annualized volatility of the strategy.")
 
 except Exception as e:
-    st.error("Failed to load data. Please check the ticker symbol.")
+    # If it fails again, this will print the EXACT reason why so we can hunt it down.
+    st.error(f"System Error: {e}")
